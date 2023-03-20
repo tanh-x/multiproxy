@@ -1,13 +1,13 @@
 package proxy
 
-import fetch.ProxyHelpers.instantiateProxyFromIP
+import proxy.ProxyHelpers.buildURLRequest
+import proxy.ProxyHelpers.instantiateProxyFromIP
+import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
-import java.io.IOException
 import java.net.Proxy
 import java.util.concurrent.TimeUnit
-import kotlin.jvm.Throws
 
 /**
  * A wrapper for an [OkHttpClient] that monitors the vitals of the proxy server. Can also use
@@ -19,7 +19,7 @@ import kotlin.jvm.Throws
  * @param tolerance How sensitive the staleness value is to failed fetches
  * @param threshold The threshold value where we terminate this client from use.
  */
-class MeteredProxyClient(
+class ProxyClient(
     private val proxyAddress: String,
     private val timeout: Long = 1500,
     private val tolerance: Float = 1 / 10f,
@@ -59,8 +59,14 @@ class MeteredProxyClient(
      */
     fun isStale(): Boolean = staleness > threshold
 
-    @Throws(IOException::class)
     fun executeRequest(request: Request): Response = client.newCall(request).execute()
+
+    fun executeRequest(url: String): Response = executeRequest(buildURLRequest(url))
+
+    fun enqueueRequest(request: Request, responseCallback: Callback) = client.newCall(request).enqueue(responseCallback)
+
+    fun enqueueRequest(url: String, responseCallback: Callback) = enqueueRequest(buildURLRequest(url), responseCallback)
+
 
     fun updateStaleness(success: Boolean) {
         staleness = (staleness + tolerance * (if (success) 0 else 1)) / (1 + tolerance)
