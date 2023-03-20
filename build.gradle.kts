@@ -13,7 +13,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.0-Beta")
     implementation("ru.gildor.coroutines:kotlin-coroutines-okhttp:1.0")
     implementation("com.squareup.okhttp3:okhttp:4.10.0")
-    implementation("io.github.oshai:kotlin-logging-jvm:4.0.0-beta-22")
 }
 
 repositories {

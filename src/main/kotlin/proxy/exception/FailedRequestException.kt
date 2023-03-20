@@ -1,4 +1,4 @@
-package proxy
+package proxy.exception
 
 class FailedRequestException(
     message: String = "Request was not successful"

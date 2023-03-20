@@ -8,6 +8,7 @@ import okhttp3.Request
 import okhttp3.Response
 import java.net.Proxy
 import java.util.concurrent.TimeUnit
+import kotlin.math.round
 
 /**
  * A wrapper for an [OkHttpClient] that monitors the vitals of the proxy server. Can also use
@@ -30,13 +31,12 @@ class ProxyClient(
      * This attribute is private and immutable.
      */
     private val proxy: Proxy? = instantiateProxyFromIP(proxyAddress)
-    private val toString: String = "[ $proxyAddress ]"
 
     /**
      * A value from 0 to 1 that denotes the vitality of the proxy server.
      * A value of 1 denotes a dead proxy, a value of 0 denotes a quality proxy
      */
-    var staleness: Float = 0f
+    var staleness: Float = 0.5f
         private set
 
     /**
@@ -68,5 +68,9 @@ class ProxyClient(
         staleness = (staleness + tolerance * value) / (1 + tolerance)
     }
 
-    override fun toString(): String = toString
+    override fun toString(): String = proxyAddress.padEnd(22) + " [${round(staleness * 1000)/10}%]\t|"
+
+    companion object {
+        const val INITIAL_STALENESS = 0.5f
+    }
 }
