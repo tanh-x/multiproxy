@@ -30,6 +30,7 @@ class ProxyClient(
      * This attribute is private and immutable.
      */
     private val proxy: Proxy? = instantiateProxyFromIP(proxyAddress)
+    private val toString: String = "[ $proxyAddress ]"
 
     /**
      * A value from 0 to 1 that denotes the vitality of the proxy server.
@@ -61,14 +62,11 @@ class ProxyClient(
 
     fun executeRequest(request: Request): Response = client.newCall(request).execute()
 
-    fun executeRequest(url: String): Response = executeRequest(buildURLRequest(url))
-
     fun enqueueRequest(request: Request, responseCallback: Callback) = client.newCall(request).enqueue(responseCallback)
 
-    fun enqueueRequest(url: String, responseCallback: Callback) = enqueueRequest(buildURLRequest(url), responseCallback)
-
-
-    fun updateStaleness(success: Boolean) {
-        staleness = (staleness + tolerance * (if (success) 0 else 1)) / (1 + tolerance)
+    fun updateStaleness(value: Float) {
+        staleness = (staleness + tolerance * value) / (1 + tolerance)
     }
+
+    override fun toString(): String = toString
 }

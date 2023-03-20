@@ -1,10 +1,16 @@
 package proxy
 
+import io.github.oshai.KotlinLogging
 import okhttp3.Request
 import okhttp3.Response
 import java.io.File
+import java.io.IOException
+import java.net.ProtocolException
+import java.net.SocketTimeoutException
 
-abstract class ProxyMonitor: ProxyManager {
+private val logger = KotlinLogging.logger {}
+
+abstract class ProxyMonitor : ProxyManager {
     protected var clientList: MutableList<ProxyClient> = mutableListOf()
     private var index: Int = 0
 
@@ -15,11 +21,40 @@ abstract class ProxyMonitor: ProxyManager {
 
     constructor(inputFile: File, includeLocal: Boolean = true) : this(inputFile.readLines(), includeLocal)
 
-    override fun handle(request: Request): Response {
-        return cycleNextClient().executeRequest(request)
+    override fun handle(request: Request): String {
+        while (true) {
+            val proxyClient: ProxyClient = cycleNextClient()
+            try {
+                val response: Response = proxyClient.executeRequest(request)
+                if (!response.isSuccessful) throw FailedRequestException("Request returned code ${response.code}")
+                val content: String = response.body!!.string()
+                if (content.isEmpty()) throw FailedRequestException("Response body was empty despite success (${response.code})")
+                // If we got here, then the request was successful
+                proxyClient.updateStaleness(SUCCESS)
+                return content
+            } catch (e: Exception) {
+                logger.warn(generateWarning(e, proxyClient))
+                proxyClient.updateStaleness(FAILURE)
+            }
+        }
     }
 
-    abstract fun dispatch(request: Request)
-    fun cycleNextClient(): ProxyClient = clientList[index++ % clientList.size]
+    private fun generateWarning(e: Exception, client: ProxyClient): String {
+        return when (e) {
+            is FailedRequestException -> "$client: Failed request. ${e.message}"
+            is SocketTimeoutException -> "$client: Connection timed out"
+            is ProtocolException -> "$client: Protocol exception (${e.message})"
+            is IOException -> "$client: IO exception (${e.message})"
+            is NullPointerException -> "$client: Response body was null"
+            else -> throw e
+        }
+    }
+
+    private fun cycleNextClient(): ProxyClient = clientList[index++ % clientList.size]
+
+    companion object {
+        const val SUCCESS = 0f
+        const val FAILURE = 1f
+    }
 }
 
