@@ -8,7 +8,7 @@ import java.io.File
 class ProxyMonitor(
     clientList: MutableList<ProxyClient>,
     timeout: Long = STD_TIMEOUT
-) : AbstractProxyMonitor(clientList, timeout) {
+) : AbstractProxyMonitor(clientList, timeout), RequestDispatcher {
     constructor(addresses: Collection<String>, timeout: Long = STD_TIMEOUT) : this(
         addresses.map(::ProxyClient).toMutableList(), timeout
     )
@@ -17,6 +17,19 @@ class ProxyMonitor(
         inputFile.readLines(), timeout
     )
 
-    override fun getResponse(client: ProxyClient, request: Request): Response = client.executeRequest(request)
+    override fun handle(request: Request): String {
+        while (true) {
+            val proxyClient: ProxyClient = cycleNextClient()
+            var response: Response? = null
+            try {
+                response = proxyClient.executeRequest(request)
+                return validateResponse(proxyClient, response)
+            } catch (e: Exception) {
+                handleResponseException(e, proxyClient)
+            } finally {
+                response?.close()
+            }
+        }
+    }
 }
 

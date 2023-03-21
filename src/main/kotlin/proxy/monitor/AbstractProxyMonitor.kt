@@ -15,7 +15,7 @@ import java.net.SocketTimeoutException
 abstract class AbstractProxyMonitor(
     clientList: MutableList<ProxyClient>,
     private var timeout: Long = STD_TIMEOUT
-) : RequestDispatcher {
+) {
     protected var clientList: MutableList<ProxyClient> = clientList
         private set(value) {
             field = value
@@ -37,36 +37,22 @@ abstract class AbstractProxyMonitor(
         inputFile.readLines(), timeout
     )
 
-    final override fun handle(request: Request): String {
-        while (true) {
-            val proxyClient: ProxyClient = cycleNextClient()
-            var response: Response? = null
-            try {
-                response = getResponse(proxyClient, request)
-
-                when (response.code) {
-                    200 -> {}
-                    429 -> throw RateLimitedException()
-                    500 -> throw EndpointInternalErrorException()
-                    else -> throw FailedRequestException("Request returned code ${response.code}")
-                }
-
-                val content: String = response.body!!.string()
-                if (content.isEmpty()) throw FailedRequestException("Response body was empty despite success (${response.code})")
-
-                // If we got here, then the request was successful
-                println("$proxyClient SUCCESS | n# = ${successCount++}")
-                proxyClient.updateStaleness(SUCCESS)
-                return content
-            } catch (e: Exception) {
-                handleResponseException(e, proxyClient)
-            } finally {
-                response?.close()
-            }
+    protected fun validateResponse(client: ProxyClient, response: Response): String {
+        when (response.code) {
+            200 -> {}
+            429 -> throw RateLimitedException()
+            500 -> throw EndpointInternalErrorException()
+            else -> throw FailedRequestException("Request returned code ${response.code}")
         }
-    }
 
-    abstract fun getResponse(client: ProxyClient, request: Request): Response
+        val content: String = response.body!!.string()
+        if (content.isEmpty()) throw FailedRequestException("Empty body despite success (${response.code})")
+
+        // If we got here, then the request was successful
+        println("$client SUCCESS | n# = ${successCount++}")
+        client.updateStaleness(SUCCESS)
+        return content
+    }
 
     protected fun handleResponseException(e: Exception, client: ProxyClient) {
         if (e !is RateLimitedException) {
@@ -80,14 +66,14 @@ abstract class AbstractProxyMonitor(
                 is FailedRequestException -> "Failed request. ${e.message}"
                 is SocketTimeoutException -> "Connection timed out"
                 is ProtocolException -> "Protocol exception (${e.message})"
-                is IOException -> "IO exception (${e.message})"
                 is NullPointerException -> "Response body was null"
-                is RateLimitedException -> e.message
+                is RateLimitedException,
+                is IOException,
                 is EndpointInternalErrorException -> e.message
+
                 else -> throw e
             }
         )
-
     }
 
     protected fun removeClient(i: Int) {
@@ -97,12 +83,12 @@ abstract class AbstractProxyMonitor(
         // TODO: Wait for network
     }
 
-    fun generateProxyReport(clients: List<ProxyClient> = clientList): String {
+    open fun generateProxyReport(clients: List<ProxyClient> = clientList): String {
         return "Healthy proxies: \n" + clients.joinToString("\n") { c: ProxyClient -> c.proxyAddress }
     }
 
-    fun addClient(address: String): AbstractProxyMonitor = this.apply { clientList.add(ProxyClient(address, timeout)) }
-    fun addClient(addresses: Collection<String>): AbstractProxyMonitor = this.apply {
+    open fun addClient(address: String): AbstractProxyMonitor = this.apply { clientList.add(ProxyClient(address, timeout)) }
+    open fun addClient(addresses: Collection<String>): AbstractProxyMonitor = this.apply {
         clientList.addAll(addresses.map { a -> ProxyClient(a, timeout) })
     }
 
