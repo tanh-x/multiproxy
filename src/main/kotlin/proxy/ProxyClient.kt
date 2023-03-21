@@ -7,6 +7,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.net.Proxy
+import java.util.LinkedList
 import java.util.concurrent.TimeUnit
 import kotlin.math.round
 
@@ -21,7 +22,7 @@ import kotlin.math.round
  * @param threshold The threshold value where we terminate this client from use.
  */
 class ProxyClient(
-    private val proxyAddress: String,
+    val proxyAddress: String,
     private val timeout: Long = 1500,
     private val tolerance: Float = 1 / 10f,
     private val threshold: Float = 0.95f
@@ -31,6 +32,10 @@ class ProxyClient(
      * This attribute is private and immutable.
      */
     private val proxy: Proxy? = instantiateProxyFromIP(proxyAddress)
+    private val ping: LinkedList<Long> = LinkedList(List(ROLLING_AVERAGE_WINDOW) { INITIAL_AVERAGE_PING })
+    var averagePing: Long = INITIAL_AVERAGE_PING
+        get() = ping.sum() / ROLLING_AVERAGE_WINDOW
+        private set
 
     /**
      * A value from 0 to 1 that denotes the vitality of the proxy server.
@@ -60,7 +65,10 @@ class ProxyClient(
      */
     fun isStale(): Boolean = staleness > threshold
 
-    fun executeRequest(request: Request): Response = client.newCall(request).execute()
+    fun executeRequest(request: Request): Response = client.newCall(request).execute().apply {
+        ping.addLast(getPing())
+        ping.removeFirst()
+    }
 
     fun enqueueRequest(request: Request, responseCallback: Callback) = client.newCall(request).enqueue(responseCallback)
 
@@ -68,9 +76,14 @@ class ProxyClient(
         staleness = (staleness + tolerance * value) / (1 + tolerance)
     }
 
-    override fun toString(): String = proxyAddress.padEnd(22) + " [${round(staleness * 1000)/10}%]\t|"
+    override fun toString(): String = proxyAddress.padEnd(21) +
+    " [${averagePing.coerceAtMost(999)}ms|${round(staleness * 1000) / 10}%]".padEnd(14) + " |"
+
+    private fun Response.getPing(): Long = receivedResponseAtMillis - sentRequestAtMillis
 
     companion object {
         const val INITIAL_STALENESS = 0.5f
+        const val INITIAL_AVERAGE_PING = 300L
+        const val ROLLING_AVERAGE_WINDOW = 6
     }
 }
