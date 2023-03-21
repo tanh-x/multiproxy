@@ -1,11 +1,12 @@
-package proxy
+package proxy.monitor
 
 import okhttp3.Request
 import okhttp3.Response
-import proxy.exception.EndpointInternalErrorException
-import proxy.exception.FailedRequestException
-import proxy.exception.NetworkError
-import proxy.exception.RateLimitedException
+import proxy.client.ProxyClient
+import exception.EndpointInternalErrorException
+import exception.FailedRequestException
+import exception.NetworkError
+import exception.RateLimitedException
 import java.io.File
 import java.io.IOException
 import java.net.ProtocolException
@@ -14,7 +15,7 @@ import java.net.SocketTimeoutException
 class ProxyMonitor(
     private var clientList: MutableList<ProxyClient>,
     private var timeout: Long = STD_TIMEOUT
-) : ProxyManager {
+) : RequestDispatcher {
     private var successCount = 0
     private var index: Int = -1
         set(value) {
@@ -72,7 +73,8 @@ class ProxyMonitor(
                 is ProtocolException -> "Protocol exception (${e.message})"
                 is IOException -> "IO exception (${e.message})"
                 is NullPointerException -> "Response body was null"
-                is RateLimitedException -> "${e.message}"
+                is RateLimitedException -> e.message
+                is EndpointInternalErrorException -> e.message
                 else -> throw e
             }
         )
@@ -99,8 +101,8 @@ class ProxyMonitor(
 
     companion object {
         const val SUCCESS = 0f
-        const val FAILURE = 1.6f
-        const val STD_TIMEOUT = 1500L
+        const val FAILURE = 1.5f
+        const val STD_TIMEOUT = 1000L
     }
 }
 

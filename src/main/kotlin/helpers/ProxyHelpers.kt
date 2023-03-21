@@ -1,4 +1,4 @@
-package proxy
+package helpers
 
 import okhttp3.OkHttpClient
 import okhttp3.Request

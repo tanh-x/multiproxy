@@ -1,8 +1,7 @@
-package proxy
+package proxy.monitor
 
 import okhttp3.Request
-import okhttp3.Response
 
-interface ProxyManager {
+interface RequestDispatcher {
     fun handle(request: Request): String
 }

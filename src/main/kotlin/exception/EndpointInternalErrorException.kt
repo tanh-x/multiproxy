@@ -1,4 +1,4 @@
-package proxy.exception
+package exception
 
 class EndpointInternalErrorException : RuntimeException("Endpoint returned 500: Internal server error") {
 }
