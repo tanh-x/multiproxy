@@ -23,7 +23,8 @@ import kotlin.math.round
 class ProxyClient(
     val proxyAddress: String,
     private val timeout: Long = 1500,
-    private val tolerance: Float = 1 / 10f,
+    private val tolerance: Float = 1 / 12f,
+    private val initialTolerance: Float = 1 / 3f,
     private val threshold: Float = 0.95f
 ) {
     /**
@@ -32,10 +33,16 @@ class ProxyClient(
      */
     private val proxy: Proxy? = instantiateProxyFromIP(proxyAddress)
 
-    private val ping: LinkedList<Long> = LinkedList(List(ROLLING_AVERAGE_WINDOW) { INITIAL_AVERAGE_PING })
+    private val ping: ArrayDeque<Long> = ArrayDeque()
     var averagePing: Long = INITIAL_AVERAGE_PING
         get() = ping.sum() / ROLLING_AVERAGE_WINDOW
         private set
+
+    /**
+     * Keeps track of how many requests have been made with this proxy, used for weighting
+     * the sensitivity of the staleness value.
+     */
+    private var counter: Int = 0
 
     /**
      * A value from 0 to 1 that denotes the vitality of the proxy server.
@@ -66,14 +73,15 @@ class ProxyClient(
     fun isStale(): Boolean = staleness > threshold
 
     fun executeRequest(request: Request): Response = client.newCall(request).execute().apply {
-        ping.addLast(getPing())
-        ping.removeFirst()
+        if (ping.size >= ROLLING_AVERAGE_WINDOW) ping.removeLast()
+        ping.addFirst(getPing())
+        counter++
     }
 
-    fun enqueueRequest(request: Request, responseCallback: Callback) = client.newCall(request).enqueue(responseCallback)
-
     fun updateStaleness(value: Float) {
-        staleness = (staleness + tolerance * value) / (1 + tolerance)
+        (if (counter < ROLLING_AVERAGE_WINDOW) initialTolerance else tolerance).let {
+            staleness = (staleness + it * value) / (1 + it)
+        }
     }
 
     override fun toString(): String = proxyAddress.padEnd(21) +

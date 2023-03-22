@@ -35,6 +35,7 @@ abstract class AbstractProxyMonitor(
             field = value
             if (field % BENCHMARK_INTERVAL == 0) {
                 val deltaTime: Long = System.nanoTime() - benchmarkTimestamp
+                benchmarkTimestamp += deltaTime
                 println(">AVERAGE TIME PER SUCCESS".padEnd(36) + "| ${deltaTime / 1e6 / BENCHMARK_INTERVAL}ms")
             }
         }
@@ -115,6 +116,7 @@ abstract class AbstractProxyMonitor(
         println("$client [!!] Proxy is stale and has been removed from circulation")
         clientList.remove(client)
         if (clientList.size == 0) throw NetworkError()
+        numClients = clientList.size
         // TODO: Wait for network
     }
 
