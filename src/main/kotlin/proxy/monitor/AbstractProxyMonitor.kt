@@ -21,7 +21,7 @@ abstract class AbstractProxyMonitor(
     private var clientList: ConcurrentLinkedDeque<ProxyClient> = ConcurrentLinkedDeque()
 
     init {
-        clientList.addAll(clientList)
+        this.clientList.addAll(clientList)
     }
 
     private var numClients: Int = clientList.size
