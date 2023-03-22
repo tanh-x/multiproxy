@@ -11,17 +11,19 @@ import java.io.File
 import java.io.IOException
 import java.net.ProtocolException
 import java.net.SocketTimeoutException
-import kotlin.math.round
+import java.util.concurrent.ConcurrentLinkedDeque
 
 abstract class AbstractProxyMonitor(
     clientList: MutableList<ProxyClient>,
     private var timeout: Long = STD_TIMEOUT
 ) : RequestDispatcher {
-    private var clientList: MutableList<ProxyClient> = clientList
-        private set(value) {
-            field = value
-            this.numClients = value.size
-        }
+
+    private var clientList: ConcurrentLinkedDeque<ProxyClient> = ConcurrentLinkedDeque()
+
+    init {
+        clientList.addAll(clientList)
+    }
+
     private var numClients: Int = clientList.size
     private var index: Int = -1
         private set(value) {
@@ -116,18 +118,23 @@ abstract class AbstractProxyMonitor(
         // TODO: Wait for network
     }
 
-    open fun generateProxyReport(clients: List<ProxyClient> = clientList): String {
-        return "Healthy proxies: \n" + clients.joinToString("\n") { c: ProxyClient -> c.proxyAddress }
+    open fun generateProxyReport(): String {
+        return "Healthy proxies: \n" + clientList.joinToString("\n") { c: ProxyClient -> c.proxyAddress }
     }
 
-    open fun addClient(address: String): AbstractProxyMonitor =
-        this.apply { clientList.add(ProxyClient(address, timeout)) }
+    open fun addClient(address: String): AbstractProxyMonitor = this.apply {
+        clientList.add(ProxyClient(address, timeout))
+        numClients = clientList.size
+    }
 
     open fun addClient(addresses: Collection<String>): AbstractProxyMonitor = this.apply {
         clientList.addAll(addresses.map { a -> ProxyClient(a, timeout) })
+        numClients = clientList.size
     }
 
-    protected fun cycleNextClient(): ProxyClient = clientList[++index]
+    protected fun cycleNextClient(): ProxyClient {
+        return clientList.elementAt(++index)
+    }
 
     companion object {
         const val SUCCESS_STALENESS_WEIGHT: Float = 0f
