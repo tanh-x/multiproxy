@@ -11,11 +11,12 @@ import java.io.File
 import java.io.IOException
 import java.net.ProtocolException
 import java.net.SocketTimeoutException
+import kotlin.math.round
 
 abstract class AbstractProxyMonitor(
     clientList: MutableList<ProxyClient>,
     private var timeout: Long = STD_TIMEOUT
-) {
+) : RequestDispatcher {
     protected var clientList: MutableList<ProxyClient> = clientList
         private set(value) {
             field = value
@@ -27,7 +28,16 @@ abstract class AbstractProxyMonitor(
             field = value % numClients
         }
 
-    protected var successCount = 0
+    protected var successCount: Int = 0
+        private set(value) {
+            field = value
+            if (field % BENCHMARK_INTERVAL == 0) {
+                val deltaTime: Long = System.nanoTime() - benchmarkTimestamp
+                println("Avg. time per success: ${deltaTime / 1e6 / BENCHMARK_INTERVAL}")
+            }
+        }
+
+    private var benchmarkTimestamp: Long = System.nanoTime()
 
     constructor(addresses: Collection<String>, timeout: Long = STD_TIMEOUT) : this(
         addresses.map(::ProxyClient).toMutableList(), timeout
@@ -37,26 +47,44 @@ abstract class AbstractProxyMonitor(
         inputFile.readLines(), timeout
     )
 
-    protected fun validateResponse(client: ProxyClient, response: Response): String {
-        when (response.code) {
-            200 -> {}
-            429 -> throw RateLimitedException()
-            500 -> throw EndpointInternalErrorException()
-            else -> throw FailedRequestException("Request returned code ${response.code}")
+    override fun handle(request: Request): String {
+        while (true) {
+            val proxyClient: ProxyClient = cycleNextClient()
+            var response: Response? = null
+            try {
+                response = proxyClient.executeRequest(request)
+                checkResponseCode(response.code)
+                return validateResponse(proxyClient, response)
+            } catch (e: Exception) {
+                handleResponseException(e, proxyClient)
+            } finally {
+                response?.close()
+            }
         }
+    }
 
+    protected fun validateResponse(client: ProxyClient, response: Response): String {
         val content: String = response.body!!.string()
         if (content.isEmpty()) throw FailedRequestException("Empty body despite success (${response.code})")
 
         // If we got here, then the request was successful
         println("$client SUCCESS | n# = ${successCount++}")
-        client.updateStaleness(SUCCESS)
+        client.updateStaleness(SUCCESS_STALENESS_WEIGHT)
         return content
+    }
+
+    protected fun checkResponseCode(code: Int) {
+        when (code) {
+            200 -> return
+            429 -> throw RateLimitedException()
+            500 -> throw EndpointInternalErrorException()
+            else -> throw FailedRequestException("Request returned code ${code}")
+        }
     }
 
     protected fun handleResponseException(e: Exception, client: ProxyClient) {
         if (e !is RateLimitedException) {
-            client.updateStaleness(FAILURE)
+            client.updateStaleness(FAILURE_STALENESS_WEIGHT)
             if (client.isStale()) removeClient(index)
         }
 
@@ -67,8 +95,8 @@ abstract class AbstractProxyMonitor(
                 is SocketTimeoutException -> "Connection timed out"
                 is ProtocolException -> "Protocol exception (${e.message})"
                 is NullPointerException -> "Response body was null"
-                is RateLimitedException,
                 is IOException,
+                is RateLimitedException,
                 is EndpointInternalErrorException -> e.message
 
                 else -> throw e
@@ -95,8 +123,9 @@ abstract class AbstractProxyMonitor(
     protected fun cycleNextClient(): ProxyClient = clientList[++index]
 
     companion object {
-        const val SUCCESS = 0f
-        const val FAILURE = 1.5f
+        const val SUCCESS_STALENESS_WEIGHT: Float = 0f
+        const val FAILURE_STALENESS_WEIGHT: Float = 1.5f
         const val STD_TIMEOUT = 1000L
+        const val BENCHMARK_INTERVAL = 100
     }
 }

@@ -40,19 +40,19 @@ class ProxyClient(
      * A value from 0 to 1 that denotes the vitality of the proxy server.
      * A value of 1 denotes a dead proxy, a value of 0 denotes a quality proxy
      */
-    var staleness: Float = 0.5f
+    private var staleness: Float = 0.5f
         private set
 
     /**
      * Whether this client is backed by a proxy server, the proxy is immutable
      */
-    val hasProxy: Boolean
+    private val hasProxy: Boolean
         get() = proxy != null
 
     /**
      * Dependency injection with [OkHttpClient]
      */
-    val client: OkHttpClient = OkHttpClient.Builder().apply {
+    private val client: OkHttpClient = OkHttpClient.Builder().apply {
         callTimeout(timeout, TimeUnit.MILLISECONDS)
         if (hasProxy) proxy(proxy)
     }.build()

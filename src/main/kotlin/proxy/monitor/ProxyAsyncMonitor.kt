@@ -1,5 +1,6 @@
 package proxy.monitor
 
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -12,7 +13,7 @@ import java.io.File
 class ProxyAsyncMonitor(
     clientList: MutableList<ProxyClient>,
     timeout: Long = STD_TIMEOUT
-) : AbstractProxyMonitor(clientList, timeout), RequestAsyncDispatcher {
+) : AbstractProxyMonitor(clientList, timeout) {
     constructor(addresses: Collection<String>, timeout: Long = STD_TIMEOUT) : this(
         addresses.map(::ProxyClient).toMutableList(), timeout
     )
@@ -21,14 +22,32 @@ class ProxyAsyncMonitor(
         inputFile.readLines(), timeout
     )
 
-    override suspend fun handle(request: Request): String = coroutineScope {
-        val proxyClient: ProxyClient
+    fun handleAll(
+        requests: Collection<Request>,
+        batchSize: Int = DFLT_BATCH_SIZE,
+    ): List<String> {
+        TODO("handle all non null")
     }
 
-    override suspend fun handle(requests: Collection<Request>): List<String> = coroutineScope {
-        return@coroutineScope requests.map { async { handle(it) } }.awaitAll()
+    fun handleAllOrNull(
+        requests: Collection<Request>, batchSize: Int = DFLT_BATCH_SIZE, attempts: Int = 1,
+    ): List<String> = runBlocking {
+        val pendingRequests: MutableList<Request> = requests.toMutableList()
+        val completedRequest: Map<Request, String?> = requests.associateBy({ it }, { null })
+        repeat(attempts) {
+            for (i in 0 until pendingRequests.size step batchSize) {
+                pendingRequests.slice(i until i + batchSize).map { r: Request ->
+                    async { handle(r) }
+                }.awaitAll()
+            }
+
+            if (null !in completedRequest.values) return@repeat
+        }
+        return@runBlocking completedRequest.values.requireNoNulls() as List<String>
     }
 
-
+    companion object {
+        const val DFLT_BATCH_SIZE: Int = 16
+    }
 }
 
