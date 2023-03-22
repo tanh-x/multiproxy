@@ -1,5 +1,6 @@
 package proxy.monitor
 
+import exception.Endpoint404Exception
 import exception.EndpointInternalErrorException
 import exception.FailedRequestException
 import exception.NetworkError
@@ -17,7 +18,6 @@ abstract class AbstractProxyMonitor(
     clientList: MutableList<ProxyClient>,
     private var timeout: Long = STD_TIMEOUT
 ) : RequestDispatcher {
-
     private var clientList: ConcurrentLinkedDeque<ProxyClient> = ConcurrentLinkedDeque()
 
     init {
@@ -76,7 +76,8 @@ abstract class AbstractProxyMonitor(
         if (content.isEmpty()) throw FailedRequestException("Empty body despite success (${response.code})")
 
         // If we got here, then the request was successful
-        println("$client SUCCESS | n# = ${successCount++}")
+        successCount++
+        if (successCount % PRINT_INTERVAL == 0) println("$client SUCCESS | n# = $successCount")
         client.updateStaleness(SUCCESS_STALENESS_WEIGHT)
         return content
     }
@@ -84,6 +85,7 @@ abstract class AbstractProxyMonitor(
     private fun checkResponseCode(code: Int) {
         when (code) {
             200 -> return
+            404 -> throw Endpoint404Exception()
             429 -> throw RateLimitedException()
             500 -> throw EndpointInternalErrorException()
             else -> throw FailedRequestException("Request returned code ${code}")
@@ -91,7 +93,7 @@ abstract class AbstractProxyMonitor(
     }
 
     private fun handleResponseException(e: Exception, client: ProxyClient) {
-        if (e !is RateLimitedException) {
+        if (e !is RateLimitedException && e !is Endpoint404Exception) {
             client.updateStaleness(FAILURE_STALENESS_WEIGHT)
             if (client.isStale()) removeClient(client)
         }
@@ -107,6 +109,7 @@ abstract class AbstractProxyMonitor(
                 is RateLimitedException,
                 is EndpointInternalErrorException -> e.message
 
+                is Endpoint404Exception -> throw e
                 else -> throw e
             }
         )
@@ -139,6 +142,7 @@ abstract class AbstractProxyMonitor(
     }
 
     companion object {
+        const val PRINT_INTERVAL = 5
         const val SUCCESS_STALENESS_WEIGHT: Float = 0f
         const val FAILURE_STALENESS_WEIGHT: Float = 1.5f
         const val STD_TIMEOUT = 1000L

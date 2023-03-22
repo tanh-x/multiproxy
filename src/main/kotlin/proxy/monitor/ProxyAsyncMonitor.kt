@@ -1,5 +1,7 @@
 package proxy.monitor
 
+import exception.Endpoint404Exception
+import helpers.ProxyHelpers.convert404toNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -39,7 +41,9 @@ class ProxyAsyncMonitor(
             val nullKeys: Set<Request> = results.filterValues { it == null }.keys
             val newValues: List<String?> = nullKeys.chunked(batchSize)
                 .map { batch: List<Request> ->
-                    batch.map { req: Request -> scope.async { handleOrNull(req) } }.awaitAll()
+                    batch.map { req: Request ->
+                        scope.async { convert404toNull { handleOrNull(req) } }
+                    }.awaitAll()
                 }.flatten()
 
             nullKeys.forEachIndexed { i: Int, req: Request -> results[req] = newValues[i] }
