@@ -1,12 +1,11 @@
 package proxy.monitor
 
-import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import okhttp3.Request
-import okhttp3.Response
 import proxy.client.ProxyClient
 import java.io.File
 
@@ -14,6 +13,8 @@ class ProxyAsyncMonitor(
     clientList: MutableList<ProxyClient>,
     timeout: Long = STD_TIMEOUT
 ) : AbstractProxyMonitor(clientList, timeout) {
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
+
     constructor(addresses: Collection<String>, timeout: Long = STD_TIMEOUT) : this(
         addresses.map(::ProxyClient).toMutableList(), timeout
     )
@@ -26,24 +27,25 @@ class ProxyAsyncMonitor(
         requests: Collection<Request>,
         batchSize: Int = DFLT_BATCH_SIZE,
     ): List<String> {
-        TODO("handle all non null")
+        return handleAllOrNull(requests, batchSize, Int.MAX_VALUE).requireNoNulls()
     }
 
     fun handleAllOrNull(
-        requests: Collection<Request>, batchSize: Int = DFLT_BATCH_SIZE, attempts: Int = 1,
-    ): List<String> = runBlocking {
-        val pendingRequests: MutableList<Request> = requests.toMutableList()
-        val completedRequest: Map<Request, String?> = requests.associateBy({ it }, { null })
-        repeat(attempts) {
-            for (i in 0 until pendingRequests.size step batchSize) {
-                pendingRequests.slice(i until i + batchSize).map { r: Request ->
-                    async { handle(r) }
-                }.awaitAll()
-            }
+        requests: Collection<Request>, batchSize: Int = DFLT_BATCH_SIZE, attempts: Int = 1
+    ): List<String?> = runBlocking {
+        val results: MutableMap<Request, String?> = requests.associateBy({ it }, { null }).toMutableMap()
 
-            if (null !in completedRequest.values) return@repeat
+        repeat(attempts) {
+            val nullKeys: Set<Request> = results.filterValues { it == null }.keys
+            val newValues: List<String?> = nullKeys.chunked(batchSize)
+                .map { batch: List<Request> ->
+                    batch.map { req: Request -> scope.async { handleOrNull(req) } }.awaitAll()
+                }.flatten()
+
+            nullKeys.forEachIndexed { i: Int, req: Request -> results[req] = newValues[i] }
         }
-        return@runBlocking completedRequest.values.requireNoNulls() as List<String>
+
+        return@runBlocking results.values.toList()
     }
 
     companion object {

@@ -17,23 +17,23 @@ abstract class AbstractProxyMonitor(
     clientList: MutableList<ProxyClient>,
     private var timeout: Long = STD_TIMEOUT
 ) : RequestDispatcher {
-    protected var clientList: MutableList<ProxyClient> = clientList
+    private var clientList: MutableList<ProxyClient> = clientList
         private set(value) {
             field = value
             this.numClients = value.size
         }
     private var numClients: Int = clientList.size
-    protected var index: Int = -1
+    private var index: Int = -1
         private set(value) {
             field = value % numClients
         }
 
-    protected var successCount: Int = 0
+    private var successCount: Int = 0
         private set(value) {
             field = value
             if (field % BENCHMARK_INTERVAL == 0) {
                 val deltaTime: Long = System.nanoTime() - benchmarkTimestamp
-                println("Avg. time per success: ${deltaTime / 1e6 / BENCHMARK_INTERVAL}")
+                println(">AVERAGE TIME PER SUCCESS".padEnd(36) + "| ${deltaTime / 1e6 / BENCHMARK_INTERVAL}ms")
             }
         }
 
@@ -47,23 +47,28 @@ abstract class AbstractProxyMonitor(
         inputFile.readLines(), timeout
     )
 
-    override fun handle(request: Request): String {
-        while (true) {
-            val proxyClient: ProxyClient = cycleNextClient()
-            var response: Response? = null
-            try {
-                response = proxyClient.executeRequest(request)
-                checkResponseCode(response.code)
-                return validateResponse(proxyClient, response)
-            } catch (e: Exception) {
-                handleResponseException(e, proxyClient)
-            } finally {
-                response?.close()
-            }
+    override fun handleOrNull(request: Request): String? {
+        val proxyClient: ProxyClient = cycleNextClient()
+        var response: Response? = null
+        try {
+            response = proxyClient.executeRequest(request)
+            checkResponseCode(response.code)
+            return validateResponse(proxyClient, response)
+        } catch (e: Exception) {
+            handleResponseException(e, proxyClient)
+        } finally {
+            response?.close()
         }
+        return null
     }
 
-    protected fun validateResponse(client: ProxyClient, response: Response): String {
+    override fun handle(request: Request): String {
+        var content: String? = null
+        while (content == null) content = handleOrNull(request)
+        return content
+    }
+
+    private fun validateResponse(client: ProxyClient, response: Response): String {
         val content: String = response.body!!.string()
         if (content.isEmpty()) throw FailedRequestException("Empty body despite success (${response.code})")
 
@@ -73,7 +78,7 @@ abstract class AbstractProxyMonitor(
         return content
     }
 
-    protected fun checkResponseCode(code: Int) {
+    private fun checkResponseCode(code: Int) {
         when (code) {
             200 -> return
             429 -> throw RateLimitedException()
@@ -82,10 +87,10 @@ abstract class AbstractProxyMonitor(
         }
     }
 
-    protected fun handleResponseException(e: Exception, client: ProxyClient) {
+    private fun handleResponseException(e: Exception, client: ProxyClient) {
         if (e !is RateLimitedException) {
             client.updateStaleness(FAILURE_STALENESS_WEIGHT)
-            if (client.isStale()) removeClient(index)
+            if (client.isStale()) removeClient(client)
         }
 
         println(
@@ -104,9 +109,9 @@ abstract class AbstractProxyMonitor(
         )
     }
 
-    protected fun removeClient(i: Int) {
-        println("${clientList[i]} [!!] Proxy is stale and has been removed from circulation")
-        clientList.removeAt(i)
+    private fun removeClient(client: ProxyClient) {
+        println("$client [!!] Proxy is stale and has been removed from circulation")
+        clientList.remove(client)
         if (clientList.size == 0) throw NetworkError()
         // TODO: Wait for network
     }
@@ -115,7 +120,9 @@ abstract class AbstractProxyMonitor(
         return "Healthy proxies: \n" + clients.joinToString("\n") { c: ProxyClient -> c.proxyAddress }
     }
 
-    open fun addClient(address: String): AbstractProxyMonitor = this.apply { clientList.add(ProxyClient(address, timeout)) }
+    open fun addClient(address: String): AbstractProxyMonitor =
+        this.apply { clientList.add(ProxyClient(address, timeout)) }
+
     open fun addClient(addresses: Collection<String>): AbstractProxyMonitor = this.apply {
         clientList.addAll(addresses.map { a -> ProxyClient(a, timeout) })
     }

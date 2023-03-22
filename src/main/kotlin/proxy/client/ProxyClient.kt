@@ -27,10 +27,11 @@ class ProxyClient(
     private val threshold: Float = 0.95f
 ) {
     /**
-     * The [Proxy] object for use wit the client, null if using local address.
+     * The [Proxy] object for use with the client, null if using local address.
      * This attribute is private and immutable.
      */
     private val proxy: Proxy? = instantiateProxyFromIP(proxyAddress)
+
     private val ping: LinkedList<Long> = LinkedList(List(ROLLING_AVERAGE_WINDOW) { INITIAL_AVERAGE_PING })
     var averagePing: Long = INITIAL_AVERAGE_PING
         get() = ping.sum() / ROLLING_AVERAGE_WINDOW
