@@ -15,21 +15,40 @@ import java.net.SocketTimeoutException
 import java.util.concurrent.ConcurrentLinkedDeque
 
 abstract class AbstractProxyMonitor(
-    clientList: MutableList<ProxyClient>,
+    clientList: List<ProxyClient>,
     private var timeout: Long = STD_TIMEOUT
 ) : RequestDispatcher {
+    /**
+     * A list of [ProxyClient] objects, stored in a thread-safe linked double-ended queue, since
+     * we access this list concurrently. We also frequently mutate this list, but only at the
+     * endpoints (e.g. the pruning of stale proxy servers). The [ProxyClient] hold a
+     * proxied [OkHttpClient] dependency injection, which are themselves immutable.
+     */
     private var clientList: ConcurrentLinkedDeque<ProxyClient> = ConcurrentLinkedDeque()
 
     init {
+        // We convert the list to a ConcurrentLinkedDeque
         this.clientList.addAll(clientList)
     }
 
+    /**
+     * The number of [ProxyClient]s we have in the list, we will be accessing this number
+     * frequently, so we memoize this value and make sure to update it every time we mutate
+     * the client list.
+     */
     private var numClients: Int = clientList.size
+
+    /**
+     * The index counter that we use to cycle through the clientList.
+     */
     private var index: Int = -1
         private set(value) {
             field = value % numClients
         }
 
+    /**
+     * The number of requests that have already been successfully completed
+     */
     private var successCount: Int = 0
         private set(value) {
             field = value
@@ -40,16 +59,23 @@ abstract class AbstractProxyMonitor(
             }
         }
 
+    /**
+     * The timestamp object that will be used to benchmark how performant the system is.
+     * Is not atomic, and will be mutated to facilitate calculations non-concurrently.
+     */
     private var benchmarkTimestamp: Long = System.nanoTime()
 
     constructor(addresses: Collection<String>, timeout: Long = STD_TIMEOUT) : this(
-        addresses.map(::ProxyClient).toMutableList(), timeout
+        addresses.map(::ProxyClient).toList(), timeout
     )
 
     constructor(inputFile: File, timeout: Long = STD_TIMEOUT) : this(
         inputFile.readLines(), timeout
     )
 
+    /**
+     * The basis for most functionality in this library. This method cycles through the
+     */
     override fun handleOrNull(request: Request): String? {
         val proxyClient: ProxyClient = cycleNextClient()
         var response: Response? = null

@@ -12,13 +12,13 @@ import proxy.client.ProxyClient
 import java.io.File
 
 class ProxyAsyncMonitor(
-    clientList: MutableList<ProxyClient>,
+    clientList: List<ProxyClient>,
     timeout: Long = STD_TIMEOUT
 ) : AbstractProxyMonitor(clientList, timeout) {
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
 
     constructor(addresses: Collection<String>, timeout: Long = STD_TIMEOUT) : this(
-        addresses.map(::ProxyClient).toMutableList(), timeout
+        addresses.map(::ProxyClient).toList(), timeout
     )
 
     constructor(inputFile: File, timeout: Long = STD_TIMEOUT) : this(
@@ -56,4 +56,3 @@ class ProxyAsyncMonitor(
         const val DFLT_BATCH_SIZE: Int = 16
     }
 }
-
