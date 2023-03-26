@@ -103,7 +103,8 @@ abstract class AbstractProxyMonitor(
 
         // If we got here, then the request was successful
         successCount++
-        if (successCount % PRINT_INTERVAL == 0) println("$client SUCCESS | n# = $successCount")
+//        if (successCount % PRINT_INTERVAL == 0)
+        println("$client SUCCESS | n# = $successCount")
         client.updateStaleness(SUCCESS_STALENESS_WEIGHT)
         return content
     }
