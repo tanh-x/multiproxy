@@ -79,9 +79,7 @@ abstract class AbstractProxyMonitor(
      * @param inputFile The file to read.
      * @param timeout Duration before timeout.
      */
-    constructor(inputFile: File, timeout: Long = STD_TIMEOUT) : this(
-        inputFile.readLines(), timeout
-    )
+    constructor(inputFile: File, timeout: Long = STD_TIMEOUT) : this(inputFile.readLines(), timeout)
 
     /**
      * The basis for most functionality in this library. This method cycles through the available
@@ -173,9 +171,8 @@ abstract class AbstractProxyMonitor(
      *
      * @return The list of addresses remaining in the list, separated by line.
      */
-    open fun generateProxyReport(): String {
-        return "Healthy proxies: \n" + clientList.joinToString("\n") { c: ProxyClient -> c.proxyAddress }
-    }
+    open fun generateProxyReport(): String =
+        "Healthy proxies: \n" + clientList.joinToString("\n") { c: ProxyClient -> c.proxyAddress }
 
     /**
      * Adds a new [ProxyClient] to the list from a String representing the IP address of the proxy
@@ -203,9 +200,7 @@ abstract class AbstractProxyMonitor(
      *
      * @return The next client in the deque.
      */
-    private fun cycleNextClient(): ProxyClient {
-        return clientList.elementAt(++index)
-    }
+    private fun cycleNextClient(): ProxyClient = clientList.elementAt(++index)
 
     companion object {
         const val SUCCESS_STALENESS_WEIGHT: Float = 0f
