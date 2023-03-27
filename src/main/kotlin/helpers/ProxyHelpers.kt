@@ -1,6 +1,5 @@
 package helpers
 
-import exception.Endpoint404Exception
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.InetSocketAddress
@@ -20,16 +19,6 @@ object ProxyHelpers {
         if (!regexIPAddress.matches(ip)) throw IllegalArgumentException("Not a valid address: $ip")
         val split: List<String> = ip.split(":")
         return Proxy(Proxy.Type.HTTP, InetSocketAddress(split[0], split[1].toInt()))
-    }
-
-    @JvmStatic
-    inline fun convert404toNull(fn: () -> String?): String? {
-        return try {
-            fn()
-        } catch (e: Endpoint404Exception) {
-            println("".padEnd(36) + "| Endpoint returned 404 not found")
-            null
-        }
     }
 
     @JvmStatic
