@@ -37,10 +37,7 @@ class ProxyAsyncMonitor(
      * @return The list of responses. The order of responses in the return value is guaranteed
      * to match the order of [requests].
      */
-    fun handleAll(
-        requests: Collection<Request>,
-        batchSize: Int = DFLT_BATCH_SIZE,
-    ): List<String> {
+    fun handleAll(requests: Collection<Request>, batchSize: Int = DFLT_BATCH_SIZE): List<String> {
         return handleAllOrNull(requests, batchSize, Int.MAX_VALUE).requireNoNulls()
     }
 

@@ -68,9 +68,9 @@ abstract class AbstractProxyMonitor(
      * @param addresses The list of addresses to instantiate [ProxyClient]s from.
      * @param timeout Duration before timeout.
      */
-    constructor(addresses: Collection<String>, timeout: Long = STD_TIMEOUT) : this(
-        addresses.map(::ProxyClient).toList(), timeout
-    )
+//    constructor(addresses: Collection<String>, timeout: Long = STD_TIMEOUT) : this(
+//        addresses.map(::ProxyClient).toList(), timeout
+//    )
 
     /**
      * This constructor takes in a [File] that holds a list of IP addresses separated by newlines.
@@ -79,7 +79,10 @@ abstract class AbstractProxyMonitor(
      * @param inputFile The file to read.
      * @param timeout Duration before timeout.
      */
-    constructor(inputFile: File, timeout: Long = STD_TIMEOUT) : this(inputFile.readLines(), timeout)
+    constructor(inputFile: File, timeout: Long = STD_TIMEOUT) : this(
+        inputFile.readLines().map(::ProxyClient).toList(),
+        timeout
+    )
 
     /**
      * The basis for most functionality in this library. This method cycles through the available
@@ -142,18 +145,18 @@ abstract class AbstractProxyMonitor(
 
         println(
             "$client FAILURE | " +
-            when (e) {
-                is FailedRequestException -> "Failed request. ${e.message}"
-                is SocketTimeoutException -> "Connection timed out"
-                is ProtocolException -> "Protocol exception (${e.message})"
-                is NullPointerException -> "Response body was null"
-                is IOException,
-                is RateLimitedException,
-                is Endpoint404Exception,
-                is EndpointInternalErrorException -> e.message
+                    when (e) {
+                        is FailedRequestException -> "Failed request. ${e.message}"
+                        is SocketTimeoutException -> "Connection timed out"
+                        is ProtocolException -> "Protocol exception (${e.message})"
+                        is NullPointerException -> "Response body was null"
+                        is IOException,
+                        is RateLimitedException,
+                        is Endpoint404Exception,
+                        is EndpointInternalErrorException -> e.message
 
-                else -> throw e
-            }
+                        else -> throw e
+                    }
         )
     }
 
